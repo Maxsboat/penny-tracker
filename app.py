@@ -494,6 +494,59 @@ with tab2:
                 st.session_state.watchlist.remove(to_remove)
                 st.rerun()
 
+    # Company name → ticker lookup
+    st.divider()
+    st.markdown("#### 🔎 Find a Ticker by Company Name")
+    st.caption("Don't know the ticker? Search by company name — pulls from OTC Markets and EDGAR.")
+    search_col1, search_col2 = st.columns([3, 1])
+    with search_col1:
+        company_search = st.text_input("Company name", placeholder="e.g. Cenntro, Vinco Ventures, Tesla", key="company_search")
+    with search_col2:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        do_search = st.button("🔎 Search", use_container_width=True)
+
+    if do_search and company_search:
+        with st.spinner(f"Searching for '{company_search}'..."):
+            try:
+                # Search EDGAR for company name
+                r = requests.get(
+                    f"https://www.sec.gov/cgi-bin/browse-edgar?company={requests.utils.quote(company_search)}&CIK=&type=10-K&dateb=&owner=include&count=20&search_text=&action=getcompany&output=atom",
+                    headers=EDGAR_HEADERS, timeout=10
+                )
+                # Parse company names and CIKs from EDGAR atom feed
+                import re as re_mod
+                names = re_mod.findall(r'<company-name>(.*?)</company-name>', r.text)
+                ciks  = re_mod.findall(r'<CIK>(\d+)</CIK>', r.text)
+                tickers_found = re_mod.findall(r'<assigned-sic-desc>.*?</assigned-sic-desc>', r.text)
+
+                if names:
+                    st.markdown("**Results from EDGAR — click a company to search OTC Markets for its ticker:**")
+                    for i, (name, cik) in enumerate(zip(names[:10], ciks[:10])):
+                        col_a, col_b, col_c = st.columns([3, 1, 1])
+                        with col_a:
+                            st.markdown(f"**{name}**")
+                        with col_b:
+                            st.markdown(f"[📄 EDGAR](https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=10-K&dateb=&owner=include&count=10)", unsafe_allow_html=True)
+                        with col_c:
+                            otc_name = requests.utils.quote(name.split(" ")[0])
+                            st.markdown(f"[🔍 OTC Markets](https://www.otcmarkets.com/research/stock-screener/api?market=Pink&search={otc_name})", unsafe_allow_html=True)
+                else:
+                    st.info("No results found on EDGAR. Try a shorter name or check spelling.")
+
+            except Exception as e:
+                st.warning("Search unavailable right now. Try OTC Markets directly.")
+
+        st.markdown(f"""
+<div style='background:#1e2130;border-radius:8px;padding:12px 16px;margin-top:8px'>
+  <div style='color:#aaa;font-size:0.85em'>🔗 Search directly on OTC Markets:</div>
+  <a href='https://www.otcmarkets.com/research/stock-screener' target='_blank' 
+     style='color:#ffd600;font-weight:600'>OTC Markets Stock Screener →</a>
+  &nbsp;&nbsp;
+  <a href='https://efts.sec.gov/LATEST/search-index?q=%22{requests.utils.quote(company_search)}%22&forms=10-K' target='_blank'
+     style='color:#4a9eff;font-weight:600'>EDGAR Full-Text Search →</a>
+</div>
+""", unsafe_allow_html=True)
+
     st.divider()
 
     # Teaching Mode Toggle — prominent
