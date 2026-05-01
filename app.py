@@ -361,6 +361,10 @@ with tab1:
     <div>{tag_html}</div>
   </div>
   <div style='font-size:0.82em;color:#aaa;margin-top:4px'>Period: {period}</div>
+  <div style='font-size:0.82em;margin-top:6px;display:flex;gap:16px'>
+    <a href='https://www.otcmarkets.com/research/stock-screener/api?market=Pink&search={requests.utils.quote(company.split("(")[0].strip())}' target='_blank' style='color:#ffd600;text-decoration:none'>🔍 Search OTC Markets →</a>
+    <a href='https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company={requests.utils.quote(company.split("(")[0].strip())}&type=8-K&dateb=&owner=include&count=10' target='_blank' style='color:#4a9eff;text-decoration:none'>📄 EDGAR Filings →</a>
+  </div>
 </div>
 """, unsafe_allow_html=True)
         else:
@@ -605,9 +609,9 @@ with tab4:
     <span class='tag {tag_css}'>{tag_label}</span>
   </div>
   <div style='font-size:0.82em;color:#aaa;margin-top:4px'>Period: {period}</div>
-  <div style='font-size:0.8em;margin-top:6px'>
-    <a href='https://efts.sec.gov/LATEST/search-index?q=%22{requests.utils.quote(query)}%22&forms=8-K&dateRange=custom&startdt={lit_start}' 
-       target='_blank' style='color:#4a9eff'>View EDGAR search results →</a>
+  <div style='font-size:0.82em;margin-top:6px;display:flex;gap:16px'>
+    <a href='https://www.otcmarkets.com/research/stock-screener/api?market=Pink&search={requests.utils.quote(company.split("(")[0].strip())}' target='_blank' style='color:#ffd600;text-decoration:none'>🔍 Search OTC Markets →</a>
+    <a href='https://efts.sec.gov/LATEST/search-index?q=%22{requests.utils.quote(query)}%22&forms=8-K&dateRange=custom&startdt={lit_start}' target='_blank' style='color:#4a9eff;text-decoration:none'>📄 EDGAR Results →</a>
   </div>
 </div>
 """, unsafe_allow_html=True)
