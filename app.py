@@ -499,7 +499,8 @@ with tab1:
 <div class='scanner-card'>
   <div style='display:flex;justify-content:space-between;align-items:flex-start'>
     <div>
-      <span style='font-size:1.1em;font-weight:700;color:#fff'>{company}</span>
+      <span style='font-size:1.1em;font-weight:700;color:#fff'>{company.split("(CIK")[0].strip()}</span>
+      <a href='https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=8-K&dateb=&owner=include&count=10' target='_blank' style='color:#666;font-size:0.8em;margin-left:8px'>CIK {cik} →</a>
       <span style='color:#888;font-size:0.8em;margin-left:10px'>{form} · {date}</span>
     </div>
     <div>{tag_html}</div>
@@ -507,9 +508,11 @@ with tab1:
   <div style='margin-top:4px'>{ticker_display}{price_display}</div>
   <div style='font-size:0.82em;color:#aaa;margin-top:4px'>Period: {period}</div>
   <div style='font-size:0.82em;margin-top:6px;display:flex;gap:16px'>
-    <a href='https://www.otcmarkets.com/research/stock-screener/api?market=Pink&search={requests.utils.quote(company.split("(")[0].strip())}' target='_blank' style='color:#ffd600;text-decoration:none'>🔍 Search OTC Markets →</a>
-    <a href='https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company={requests.utils.quote(company.split("(")[0].strip())}&type=8-K&dateb=&owner=include&count=10' target='_blank' style='color:#4a9eff;text-decoration:none'>📄 EDGAR Filings →</a>
+    <a href='https://www.otcmarkets.com/search#/{company.split("(CIK")[0].strip().split()[0]}' target='_blank' style='color:#ffd600;text-decoration:none'>🔍 OTC Markets Search →</a>
+    <a href='https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=8-K&dateb=&owner=include&count=10' target='_blank' style='color:#4a9eff;text-decoration:none'>📄 EDGAR Filings →</a>
   </div>
+</div>
+""", unsafe_allow_html=True)
 </div>
 """, unsafe_allow_html=True)
         else:
