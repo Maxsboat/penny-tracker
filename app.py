@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
+import re
 from datetime import datetime, timedelta
 import json
 import re
@@ -411,9 +412,20 @@ with tab1:
             "Reorganization plan filed",
         ])
     with col2:
-        scan_form = st.selectbox("Filing type", ["8-K", "10-K", "10-Q"])
+        scan_form = st.selectbox("Filing type", [
+            "8-K — Material events (bankruptcy, settlement, CEO change)",
+            "10-K — Annual report (business description, management bios)",
+            "10-Q — Quarterly report (cash burn, financial trend)",
+        ])
+        scan_form_code = scan_form.split(" ")[0]  # Extract just 8-K, 10-K, or 10-Q
     with col3:
-        scan_start = st.selectbox("Since", ["2025-01-01", "2024-06-01", "2024-01-01", "2023-01-01"])
+        this_year = datetime.now().year
+        scan_start = st.selectbox("Since", [
+            f"{this_year}-01-01",
+            f"{this_year-1}-06-01",
+            f"{this_year-1}-01-01",
+            f"{this_year-2}-01-01",
+        ])
 
     SCAN_QUERIES = {
         "Bankruptcy filings (Chapter 11)":  "chapter 11 bankruptcy",
@@ -427,7 +439,7 @@ with tab1:
     if st.button("🔍 Run Scan", type="primary", use_container_width=True):
         query = SCAN_QUERIES[scan_type]
         with st.spinner(f"Scanning EDGAR for '{query}'..."):
-            hits = search_edgar_full(query, form_type=scan_form, start_date=scan_start)
+            hits = search_edgar_full(query, form_type=scan_form_code, start_date=scan_start)
 
         if hits:
             st.success(f"Found {len(hits)} filings matching '{scan_type}'")
@@ -435,14 +447,30 @@ with tab1:
                 src = hit.get("_source", {})
                 company = src.get("entity_name", "Unknown")
                 date    = src.get("file_date", "")
-                form    = src.get("form_type", scan_form)
+                form    = src.get("form_type", scan_form_code)
                 period  = src.get("period_of_report", "")
+
+                # Try to get ticker and price from company name CIK
+                cik = src.get("entity_id", "")
+                ticker_display = ""
+                price_display  = ""
 
                 tags = classify_filing(scan_type.lower())
                 tag_html = ""
                 for tag in tags:
                     css = {"BANKRUPTCY": "tag-bk", "LITIGATION": "tag-lit", "SETTLEMENT": "tag-settle"}.get(tag, "tag-volume")
                     tag_html += f"<span class='tag {css}'>{tag}</span>"
+
+                # Extract ticker from company name if shown in parentheses e.g. "ACACIA RESEARCH CORP (ACTG)"
+                ticker_match = re.search(r'\(([A-Z]{1,5})\)', company)
+                if ticker_match:
+                    possible_ticker = ticker_match.group(1)
+                    price_data = get_stock_data(possible_ticker)
+                    if price_data and price_data["price"] <= 10:
+                        color = "#00c853" if price_data["change"] >= 0 else "#ff5252"
+                        arrow = "▲" if price_data["change"] >= 0 else "▼"
+                        ticker_display = f"<span style='background:#2a2a00;color:#ffd600;padding:2px 8px;border-radius:4px;font-weight:700'>{possible_ticker}</span>"
+                        price_display  = f"<span style='color:{color};font-weight:700;margin-left:8px'>${price_data['price']:.4f} {arrow}{abs(price_data['change']):.2f}%</span>"
 
                 st.markdown(f"""
 <div class='scanner-card'>
@@ -453,6 +481,7 @@ with tab1:
     </div>
     <div>{tag_html}</div>
   </div>
+  <div style='margin-top:4px'>{ticker_display}{price_display}</div>
   <div style='font-size:0.82em;color:#aaa;margin-top:4px'>Period: {period}</div>
   <div style='font-size:0.82em;margin-top:6px;display:flex;gap:16px'>
     <a href='https://www.otcmarkets.com/research/stock-screener/api?market=Pink&search={requests.utils.quote(company.split("(")[0].strip())}' target='_blank' style='color:#ffd600;text-decoration:none'>🔍 Search OTC Markets →</a>
