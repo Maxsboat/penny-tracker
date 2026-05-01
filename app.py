@@ -89,6 +89,8 @@ if "watchlist" not in st.session_state:
     st.session_state.watchlist = [
         "CENN", "SNDL", "NAKD", "MULN", "BBIG"
     ]
+if "notes" not in st.session_state:
+    st.session_state.notes = {}
 
 # ─── EDGAR API Functions ──────────────────────────────────────────────────────
 EDGAR_HEADERS = {"User-Agent": "PennyTracker research@pennytacker.com"}
@@ -535,6 +537,7 @@ with tab2:
                     "Signal":      sig,
                     "Red Flags":   flag_str,
                     "Management":  mgmt,
+                    "My Notes":    st.session_state.notes.get(ticker, ""),
                     "Research":    f"https://www.otcmarkets.com/stock/{ticker}/company-info",
                 })
             else:
@@ -544,6 +547,7 @@ with tab2:
                     "Vol Spike":  "—", "RSI": "—", "Signal": "⬜ No data",
                     "Red Flags":  flag_str,
                     "Management": mgmt,
+                    "My Notes":   st.session_state.notes.get(ticker, ""),
                     "Research":   f"https://www.otcmarkets.com/stock/{ticker}/company-info",
                 })
 
@@ -565,8 +569,29 @@ with tab2:
                     "Management",
                     width="large",
                 ),
+                "My Notes": st.column_config.TextColumn(
+                    "My Notes",
+                    width="large",
+                ),
             }
         )
+
+        # Notes editor
+        st.divider()
+        st.markdown("#### 📝 My Research Notes")
+        st.caption("Add your own observations per ticker — name changes, officer research, why you're watching it. Saved for this session.")
+        note_ticker = st.selectbox("Select ticker to add note", st.session_state.watchlist, key="note_select")
+        note_text = st.text_area(
+            "Note",
+            value=st.session_state.notes.get(note_ticker, ""),
+            placeholder="e.g. 3 name changes, no officers listed on OTC Markets, NY incorporation, classic shell pattern. Watch only.",
+            height=80,
+            key=f"note_input_{note_ticker}"
+        )
+        if st.button("💾 Save Note"):
+            st.session_state.notes[note_ticker] = note_text
+            st.success(f"Note saved for {note_ticker}")
+            st.rerun()
 
         if teach:
             st.markdown("""
