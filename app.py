@@ -163,12 +163,21 @@ def search_edgar_by_keyword(keyword, form_type="8-K", start_date="2024-01-01"):
 def search_edgar_full(query, form_type="8-K", start_date="2024-01-01"):
     """Use EDGAR full-text search"""
     try:
-        r = requests.get(
-            f"https://efts.sec.gov/LATEST/search-index?q=%22{requests.utils.quote(query)}%22&forms={form_type}&dateRange=custom&startdt={start_date}&hits.hits._source=file_date,entity_name,form_type,period_of_report,file_num",
-            headers=EDGAR_HEADERS, timeout=15
-        )
+        encoded = requests.utils.quote(query)
+        url = f"https://efts.sec.gov/LATEST/search-index?q=%22{encoded}%22&forms={form_type}&dateRange=custom&startdt={start_date}"
+        r = requests.get(url, headers=EDGAR_HEADERS, timeout=15)
         data = r.json()
-        return data.get("hits", {}).get("hits", [])
+        hits = data.get("hits", {}).get("hits", [])
+        for hit in hits:
+            src = hit.get("_source", {})
+            if not src.get("entity_name"):
+                names = src.get("display_names", [])
+                if names:
+                    src["entity_name"] = names[0].get("name", "Unknown") if isinstance(names[0], dict) else names[0]
+            if not src.get("file_date"):
+                src["file_date"] = src.get("period_of_report", "")
+            hit["_source"] = src
+        return hits
     except Exception:
         return []
 
