@@ -99,7 +99,21 @@ if "manual_flags" not in st.session_state:
 EDGAR_HEADERS = {"User-Agent": "PennyTracker research@pennytacker.com"}
 
 @st.cache_data(ttl=3600)
-def get_edgar_cik(ticker):
+def get_ticker_from_cik(cik):
+    """Look up ticker symbol from SEC CIK number"""
+    try:
+        r = requests.get(
+            "https://www.sec.gov/files/company_tickers.json",
+            headers=EDGAR_HEADERS, timeout=10
+        )
+        data = r.json()
+        cik_int = int(cik)
+        for key, val in data.items():
+            if val.get("cik_str") == cik_int:
+                return val.get("ticker", ""), val.get("title", "")
+        return "", ""
+    except Exception:
+        return "", ""
     try:
         url = "https://efts.sec.gov/LATEST/search-index?q=%22{}%22&dateRange=custom&startdt=2020-01-01&forms=10-K".format(ticker)
         r = requests.get(
@@ -450,27 +464,30 @@ with tab1:
                 form    = src.get("form_type", scan_form_code)
                 period  = src.get("period_of_report", "")
 
-                # Try to get ticker and price from company name CIK
+                # Look up ticker from CIK
                 cik = src.get("entity_id", "")
                 ticker_display = ""
                 price_display  = ""
 
-                tags = classify_filing(scan_type.lower())
-                tag_html = ""
-                for tag in tags:
-                    css = {"BANKRUPTCY": "tag-bk", "LITIGATION": "tag-lit", "SETTLEMENT": "tag-settle"}.get(tag, "tag-volume")
-                    tag_html += f"<span class='tag {css}'>{tag}</span>"
-
-                # Extract ticker from company name if shown in parentheses e.g. "ACACIA RESEARCH CORP (ACTG)"
+                # First try parenthetical ticker in name
                 ticker_match = re.search(r'\(([A-Z]{1,5})\)', company)
                 if ticker_match:
                     possible_ticker = ticker_match.group(1)
+                elif cik:
+                    possible_ticker, _ = get_ticker_from_cik(str(int(cik)))
+                else:
+                    possible_ticker = ""
+
+                if possible_ticker:
                     price_data = get_stock_data(possible_ticker)
-                    if price_data and price_data["price"] <= 10:
+                    if price_data:
                         color = "#00c853" if price_data["change"] >= 0 else "#ff5252"
                         arrow = "▲" if price_data["change"] >= 0 else "▼"
                         ticker_display = f"<span style='background:#2a2a00;color:#ffd600;padding:2px 8px;border-radius:4px;font-weight:700'>{possible_ticker}</span>"
                         price_display  = f"<span style='color:{color};font-weight:700;margin-left:8px'>${price_data['price']:.4f} {arrow}{abs(price_data['change']):.2f}%</span>"
+                    else:
+                        ticker_display = f"<span style='background:#2a2a00;color:#ffd600;padding:2px 8px;border-radius:4px;font-weight:700'>{possible_ticker}</span>"
+                        price_display  = "<span style='color:#888;margin-left:8px'>No price data — may be delisted</span>"
 
                 st.markdown(f"""
 <div class='scanner-card'>
