@@ -217,9 +217,9 @@ def get_recent_filings(ticker, form_types=None):
                 "form":      src.get("form_type", ""),
                 "date":      src.get("file_date", ""),
                 "company":   src.get("entity_name", ticker),
-                "title":     src.get("display_names", [""])[0] if src.get("display_names") else "",
+                "title":     str(src.get("display_names", [""])[0]) if src.get("display_names") else "",
                 "url":       f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={ticker}&type={src.get('form_type','8-K')}&dateb=&owner=include&count=10",
-                "accession": src.get("file_num", ""),
+                "accession": str(src.get("file_num", "")),
             })
         return filings
     except Exception:
