@@ -507,56 +507,86 @@ with tab2:
     if price_filter:
         st.caption("Hiding tickers trading over $5. Toggle off to see all watchlist entries.")
 
-    # Company name → ticker lookup
+    # OTC Screener — stocks under $5
     st.divider()
-    st.markdown("#### 🔎 Find a Ticker by Company Name")
-    st.caption("Don't know the ticker? Search by company name — pulls from OTC Markets and EDGAR.")
-    search_col1, search_col2 = st.columns([3, 1])
-    with search_col1:
-        company_search = st.text_input("Company name", placeholder="e.g. Cenntro, Vinco Ventures, Tesla", key="company_search")
-    with search_col2:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        do_search = st.button("🔎 Search", use_container_width=True)
+    st.markdown("#### 📋 OTC Stocks Under $5 — Live Screener")
+    st.caption("Pulls current OTC/Pink Sheet stocks trading under $5. Click any ticker to add to your watchlist.")
 
-    if do_search and company_search:
-        with st.spinner(f"Searching for '{company_search}'..."):
+    screen_col1, screen_col2, screen_col3 = st.columns(3)
+    with screen_col1:
+        max_price = st.slider("Max price ($)", 0.01, 5.00, 1.00, step=0.25)
+    with screen_col2:
+        min_volume = st.selectbox("Min daily volume", ["Any", "10,000+", "50,000+", "100,000+", "500,000+"])
+    with screen_col3:
+        screen_btn = st.button("🔍 Screen Now", use_container_width=True, type="primary")
+
+    VOL_MAP = {"Any": 0, "10,000+": 10000, "50,000+": 50000, "100,000+": 100000, "500,000+": 500000}
+
+    if screen_btn:
+        min_vol_val = VOL_MAP[min_volume]
+        with st.spinner("Scanning OTC markets..."):
             try:
-                # Search EDGAR for company name
-                r = requests.get(
-                    f"https://www.sec.gov/cgi-bin/browse-edgar?company={requests.utils.quote(company_search)}&CIK=&type=10-K&dateb=&owner=include&count=20&search_text=&action=getcompany&output=atom",
-                    headers=EDGAR_HEADERS, timeout=10
+                # Use OTC Markets API for screener
+                url = (
+                    f"https://www.otcmarkets.com/research/stock-screener/api?"
+                    f"market=Pink,Expert,Venture&"
+                    f"maxPrice={max_price}&"
+                    f"minVolume={min_vol_val}&"
+                    f"sortBy=dollarVolume&sortOrder=desc&"
+                    f"pageSize=50&pageNum=1"
                 )
-                # Parse company names and CIKs from EDGAR atom feed
-                import re as re_mod
-                names = re_mod.findall(r'<company-name>(.*?)</company-name>', r.text)
-                ciks  = re_mod.findall(r'<CIK>(\d+)</CIK>', r.text)
-                tickers_found = re_mod.findall(r'<assigned-sic-desc>.*?</assigned-sic-desc>', r.text)
+                r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+                if r.status_code == 200:
+                    data = r.json()
+                    stocks = data.get("stocks", []) or data.get("data", []) or []
+                    if stocks:
+                        st.success(f"Found {len(stocks)} stocks under ${max_price:.2f}")
+                        screen_rows = []
+                        for s in stocks[:50]:
+                            ticker  = s.get("symbol", s.get("ticker", ""))
+                            name    = s.get("companyName", s.get("name", ""))
+                            price   = s.get("lastSale", s.get("price", 0))
+                            chg     = s.get("percentChange", s.get("change", 0))
+                            vol     = s.get("volume", s.get("totalVolume", 0))
+                            market  = s.get("market", s.get("marketName", ""))
+                            if ticker:
+                                screen_rows.append({
+                                    "Ticker":  ticker,
+                                    "Company": name,
+                                    "Price":   f"${price:.4f}" if price else "—",
+                                    "Day %":   f"{chg:+.2f}%" if chg else "—",
+                                    "Volume":  f"{int(vol):,}" if vol else "—",
+                                    "Market":  market,
+                                    "Add":     f"➕ {ticker}",
+                                })
 
-                if names:
-                    st.markdown("**Results from EDGAR — click a company to search OTC Markets for its ticker:**")
-                    for i, (name, cik) in enumerate(zip(names[:10], ciks[:10])):
-                        col_a, col_b, col_c = st.columns([3, 1, 1])
-                        with col_a:
-                            st.markdown(f"**{name}**")
-                        with col_b:
-                            st.markdown(f"[📄 EDGAR](https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=10-K&dateb=&owner=include&count=10)", unsafe_allow_html=True)
-                        with col_c:
-                            otc_name = requests.utils.quote(name.split(" ")[0])
-                            st.markdown(f"[🔍 OTC Markets](https://www.otcmarkets.com/research/stock-screener/api?market=Pink&search={otc_name})", unsafe_allow_html=True)
+                        if screen_rows:
+                            screen_df = pd.DataFrame(screen_rows)
+                            st.dataframe(screen_df, use_container_width=True, hide_index=True)
+                            st.caption("Copy any ticker above and paste it into the **Add ticker** box at the top to add it to your watchlist.")
+                        else:
+                            st.info("No stocks returned. Try adjusting the filters.")
+                    else:
+                        raise ValueError("Empty response")
                 else:
-                    st.info("No results found on EDGAR. Try a shorter name or check spelling.")
+                    raise ValueError(f"Status {r.status_code}")
 
-            except Exception as e:
-                st.warning("Search unavailable right now. Try OTC Markets directly.")
-
-        st.markdown(f"""
-<div style='background:#1e2130;border-radius:8px;padding:12px 16px;margin-top:8px'>
-  <div style='color:#aaa;font-size:0.85em'>🔗 Search directly on OTC Markets:</div>
-  <a href='https://www.otcmarkets.com/research/stock-screener' target='_blank' 
-     style='color:#ffd600;font-weight:600'>OTC Markets Stock Screener →</a>
-  &nbsp;&nbsp;
-  <a href='https://efts.sec.gov/LATEST/search-index?q=%22{requests.utils.quote(company_search)}%22&forms=10-K' target='_blank'
-     style='color:#4a9eff;font-weight:600'>EDGAR Full-Text Search →</a>
+            except Exception:
+                # Fallback — direct OTC Markets link with filters pre-set
+                st.info("Live screener unavailable — OTC Markets restricts direct API access. Use the link below to screen on their site:")
+                vol_param = min_vol_val if min_vol_val > 0 else ""
+                st.markdown(f"""
+<div style='background:#1e2130;border-radius:8px;padding:14px 16px'>
+  <div style='margin-bottom:8px'>
+    <a href='https://www.otcmarkets.com/research/stock-screener?market=Pink,Expert,Venture&maxPrice={max_price}&minVolume={vol_param}&sortBy=dollarVolume&sortOrder=desc' 
+       target='_blank' style='color:#ffd600;font-weight:700;font-size:1.05em'>
+       🔍 Open OTC Markets Screener — Under ${max_price:.2f} →
+    </a>
+  </div>
+  <div style='color:#aaa;font-size:0.85em'>
+    The screener will open with your price/volume filters pre-set. Find a ticker you like, 
+    copy it, and paste it into the <strong>Add ticker</strong> box above.
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
