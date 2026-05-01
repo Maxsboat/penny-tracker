@@ -578,30 +578,32 @@ with tab2:
             }
         )
 
+        # Quick flag buttons — one per ticker
+        st.divider()
+        st.markdown("**⚡ Quick Flag — click to toggle red flag on any ticker:**")
+        flag_cols = st.columns(len(st.session_state.watchlist))
+        for col, ticker in zip(flag_cols, st.session_state.watchlist):
+            with col:
+                is_flagged = st.session_state.manual_flags.get(ticker, False)
+                btn_label = f"🚩 {ticker}" if is_flagged else f"✅ {ticker}"
+                btn_color = "primary" if is_flagged else "secondary"
+                if st.button(btn_label, key=f"qflag_{ticker}", use_container_width=True, type=btn_color):
+                    st.session_state.manual_flags[ticker] = not is_flagged
+                    st.rerun()
+
         # Notes editor
         st.divider()
         st.markdown("#### 📝 My Research Notes")
-        st.caption("Add your own observations and manually flag any ticker your research reveals as suspicious — overrides the automated check.")
+        st.caption("Add your own observations per ticker. Use the Quick Flag buttons above to flag/unflag instantly.")
         note_ticker = st.selectbox("Select ticker", st.session_state.watchlist, key="note_select")
 
-        col_note, col_flag = st.columns([3, 1])
-        with col_note:
-            note_text = st.text_area(
-                "Research note",
-                value=st.session_state.notes.get(note_ticker, ""),
-                placeholder="e.g. 3 name changes, no officers on OTC Markets, NY incorporation — classic shell pattern. Watch only.",
-                height=80,
-                key=f"note_input_{note_ticker}"
-            )
-        with col_flag:
-            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-            is_flagged = st.session_state.manual_flags.get(note_ticker, False)
-            flag_label = "🚩 Flagged — AVOID" if is_flagged else "✅ Not flagged"
-            flag_color = "#ff5252" if is_flagged else "#00c853"
-            st.markdown(f"<div style='background:#1e2130;border-left:4px solid {flag_color};border-radius:6px;padding:8px 12px;font-weight:700;color:{flag_color}'>{flag_label}</div>", unsafe_allow_html=True)
-            if st.button("🚩 Toggle Flag", use_container_width=True, key="toggle_flag"):
-                st.session_state.manual_flags[note_ticker] = not is_flagged
-                st.rerun()
+        note_text = st.text_area(
+            "Research note",
+            value=st.session_state.notes.get(note_ticker, ""),
+            placeholder="e.g. 3 name changes, no officers on OTC Markets, NY incorporation — classic shell pattern. Avoid.",
+            height=80,
+            key=f"note_input_{note_ticker}"
+        )
 
         if st.button("💾 Save Note", use_container_width=False):
             st.session_state.notes[note_ticker] = note_text
