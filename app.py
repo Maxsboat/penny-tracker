@@ -485,7 +485,15 @@ with tab2:
             tickers = [t.strip() for t in new_ticker.split(",")]
             for t in tickers:
                 if t and t not in st.session_state.watchlist:
-                    st.session_state.watchlist.append(t)
+                    # Price check before adding
+                    data = get_stock_data(t)
+                    if data and data["price"] > 5.0:
+                        st.warning(f"⚠️ {t} is trading at ${data['price']:.2f} — over the $5 penny stock threshold. Add anyway?")
+                        if st.button(f"Add {t} anyway", key=f"force_add_{t}"):
+                            st.session_state.watchlist.append(t)
+                            st.rerun()
+                    else:
+                        st.session_state.watchlist.append(t)
             st.rerun()
     with col_remove:
         if st.session_state.watchlist:
@@ -493,6 +501,11 @@ with tab2:
             if st.button("➖ Remove") and to_remove != "—":
                 st.session_state.watchlist.remove(to_remove)
                 st.rerun()
+
+    # Price filter toggle
+    price_filter = st.toggle("💲 Show only stocks under $5", value=True)
+    if price_filter:
+        st.caption("Hiding tickers trading over $5. Toggle off to see all watchlist entries.")
 
     # Company name → ticker lookup
     st.divider()
@@ -580,6 +593,9 @@ with tab2:
             mgmt  = get_management_names(ticker)
             flag_str = " ".join(flags) if flags else "✅ None detected"
             if data:
+                # Apply $5 filter
+                if price_filter and data["price"] > 5.0:
+                    continue
                 sig, rsi = get_signal(data["hist"])
                 vol_flag = "🔥" if data["vol_spike"] >= 2.0 else ""
                 rows.append({
