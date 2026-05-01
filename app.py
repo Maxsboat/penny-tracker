@@ -110,15 +110,10 @@ def get_edgar_cik(ticker):
 
 @st.cache_data(ttl=3600)
 def get_red_flags(ticker):
-    """Check EDGAR for red flags: multiple name changes, missing filings, shell indicators"""
+    """Check EDGAR and OTC Markets for red flags"""
     flags = []
     try:
-        # Check filing history — if no recent 10-K that's a flag
-        r = requests.get(
-            f"https://data.sec.gov/submissions/CIK{ticker}.json",
-            headers=EDGAR_HEADERS, timeout=10
-        )
-        # Try company search instead
+        # Check for recent 10-K on EDGAR
         r2 = requests.get(
             f"https://www.sec.gov/cgi-bin/browse-edgar?company=&CIK={ticker}&type=10-K&dateb=&owner=include&count=5&search_text=&action=getcompany&output=atom",
             headers=EDGAR_HEADERS, timeout=10
@@ -126,7 +121,7 @@ def get_red_flags(ticker):
         if "No matching" in r2.text or r2.text.count("<entry>") == 0:
             flags.append("⚠️ No 10-K filed")
 
-        # Check for recent 8-K bankruptcy
+        # Check for bankruptcy in recent 8-Ks
         r3 = requests.get(
             f"https://www.sec.gov/cgi-bin/browse-edgar?company=&CIK={ticker}&type=8-K&dateb=&owner=include&count=10&search_text=&action=getcompany&output=atom",
             headers=EDGAR_HEADERS, timeout=10
@@ -136,6 +131,45 @@ def get_red_flags(ticker):
 
     except Exception:
         pass
+
+    # Check OTC Markets for hidden officers
+    try:
+        r4 = requests.get(
+            f"https://www.otcmarkets.com/filing/json/issuer/{ticker}/officers",
+            headers={"User-Agent": "Mozilla/5.0"}, timeout=10
+        )
+        if r4.status_code == 200:
+            data = r4.json()
+            officers = data.get("officers", [])
+            if not officers:
+                flags.append("🚨 No officers on OTC Markets")
+    except Exception:
+        pass
+
+    # Check OTC Markets company profile for shell indicators
+    try:
+        r5 = requests.get(
+            f"https://www.otcmarkets.com/filing/json/issuer/{ticker}/profile",
+            headers={"User-Agent": "Mozilla/5.0"}, timeout=10
+        )
+        if r5.status_code == 200:
+            profile = r5.json()
+            # Check for multiple name changes
+            former_names = profile.get("formerNames", [])
+            if len(former_names) >= 2:
+                flags.append(f"⚠️ {len(former_names)} prior name changes")
+            # Check state of incorporation
+            state = profile.get("stateOfIncorporation", "")
+            if state in ["NV", "WY"]:
+                flags.append(f"⚠️ Incorporated in {state} (shell-friendly state)")
+            # Check SIC mismatch indicators
+            sic = str(profile.get("sicCode", ""))
+            company_desc = profile.get("businessDescription", "") or ""
+            if sic == "3944":
+                flags.append("⚠️ SIC 3944 — Games/Toys (common shell mismatch)")
+    except Exception:
+        pass
+
     return flags
 
 @st.cache_data(ttl=3600)
@@ -452,7 +486,13 @@ with tab2:
 
     st.divider()
 
-    # Teaching Mode Toggle
+    # Teaching Mode Toggle — prominent
+    st.markdown("""
+<div style='background:#1a1a2e;border:1px solid #7c4dff;border-radius:8px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px'>
+  <span style='font-size:1.3em'>🎓</span>
+  <span style='color:#ccc;font-size:0.9em'><strong style='color:#7c4dff'>Teaching Mode</strong> — toggle on to explain every column in plain English. Great for learning with kids or friends new to investing.</span>
+</div>
+""", unsafe_allow_html=True)
     teach = st.toggle("🎓 Teaching Mode — explain everything", value=False)
 
     if teach:
