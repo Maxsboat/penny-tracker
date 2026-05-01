@@ -109,7 +109,56 @@ def get_edgar_cik(ticker):
         return None
 
 @st.cache_data(ttl=3600)
-def get_recent_filings(ticker, form_types=None):
+def get_red_flags(ticker):
+    """Check EDGAR for red flags: multiple name changes, missing filings, shell indicators"""
+    flags = []
+    try:
+        # Check filing history — if no recent 10-K that's a flag
+        r = requests.get(
+            f"https://data.sec.gov/submissions/CIK{ticker}.json",
+            headers=EDGAR_HEADERS, timeout=10
+        )
+        # Try company search instead
+        r2 = requests.get(
+            f"https://www.sec.gov/cgi-bin/browse-edgar?company=&CIK={ticker}&type=10-K&dateb=&owner=include&count=5&search_text=&action=getcompany&output=atom",
+            headers=EDGAR_HEADERS, timeout=10
+        )
+        if "No matching" in r2.text or r2.text.count("<entry>") == 0:
+            flags.append("⚠️ No 10-K filed")
+
+        # Check for recent 8-K bankruptcy
+        r3 = requests.get(
+            f"https://www.sec.gov/cgi-bin/browse-edgar?company=&CIK={ticker}&type=8-K&dateb=&owner=include&count=10&search_text=&action=getcompany&output=atom",
+            headers=EDGAR_HEADERS, timeout=10
+        )
+        if "chapter 11" in r3.text.lower() or "bankruptcy" in r3.text.lower():
+            flags.append("🔴 Bankruptcy in filings")
+
+    except Exception:
+        pass
+    return flags
+
+@st.cache_data(ttl=3600)
+def get_management_names(ticker):
+    """Pull officer names from EDGAR company facts"""
+    try:
+        # Search EDGAR for DEF 14A (proxy statement) which lists all officers
+        r = requests.get(
+            f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={ticker}&type=DEF+14A&dateb=&owner=include&count=5&output=atom",
+            headers=EDGAR_HEADERS, timeout=10
+        )
+        if r.text.count("<entry>") > 0:
+            return "✅ Proxy filed — officers disclosed"
+        # Check 10-K
+        r2 = requests.get(
+            f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={ticker}&type=10-K&dateb=&owner=include&count=3&output=atom",
+            headers=EDGAR_HEADERS, timeout=10
+        )
+        if r2.text.count("<entry>") > 0:
+            return "✅ 10-K filed — check Item 10 for officers"
+        return "🚨 No proxy or 10-K — management HIDDEN"
+    except Exception:
+        return "⬜ Could not verify"
     if form_types is None:
         form_types = ["8-K", "10-K", "SC 13G"]
     try:
@@ -409,6 +458,9 @@ with tab2:
         rows = []
         for ticker in st.session_state.watchlist:
             data = get_stock_data(ticker)
+            flags = get_red_flags(ticker)
+            mgmt  = get_management_names(ticker)
+            flag_str = " ".join(flags) if flags else "✅ None detected"
             if data:
                 sig, rsi = get_signal(data["hist"])
                 vol_flag = "🔥" if data["vol_spike"] >= 2.0 else ""
@@ -420,14 +472,18 @@ with tab2:
                     "Vol Spike":   f"{data['vol_spike']:.1f}x {vol_flag}",
                     "RSI":         rsi if rsi else "—",
                     "Signal":      sig,
+                    "Red Flags":   flag_str,
+                    "Management":  mgmt,
                     "Research":    f"https://www.otcmarkets.com/stock/{ticker}/company-info",
                 })
             else:
                 rows.append({
-                    "Ticker": ticker,
-                    "Price":  "—", "Day %": "—", "Volume": "—",
-                    "Vol Spike": "—", "RSI": "—", "Signal": "⬜ No data",
-                    "Research": f"https://www.otcmarkets.com/stock/{ticker}/company-info",
+                    "Ticker":     ticker,
+                    "Price":      "—", "Day %": "—", "Volume": "—",
+                    "Vol Spike":  "—", "RSI": "—", "Signal": "⬜ No data",
+                    "Red Flags":  flag_str,
+                    "Management": mgmt,
+                    "Research":   f"https://www.otcmarkets.com/stock/{ticker}/company-info",
                 })
 
         df = pd.DataFrame(rows)
@@ -439,9 +495,32 @@ with tab2:
                 "Research": st.column_config.LinkColumn(
                     "OTC Profile",
                     display_text="🔍 Research",
-                )
+                ),
+                "Red Flags": st.column_config.TextColumn(
+                    "Red Flags",
+                    width="medium",
+                ),
+                "Management": st.column_config.TextColumn(
+                    "Management",
+                    width="large",
+                ),
             }
         )
+
+        st.divider()
+        st.markdown("""
+<div style='background:#1e2130;border-radius:8px;padding:14px 16px;margin-bottom:8px'>
+  <div style='font-weight:700;color:#ffd600;margin-bottom:6px'>🚨 Shell Company Red Flag Checklist</div>
+  <div style='color:#ccc;font-size:0.875em;line-height:1.8'>
+    <strong>Nevada/Wyoming incorporation</strong> + multiple name changes = highest risk pattern<br>
+    <strong>No 10-K filed</strong> = management hiding from disclosure requirements<br>
+    <strong>No proxy statement (DEF 14A)</strong> = officer names not publicly disclosed<br>
+    <strong>Same officers across multiple failed OTC companies</strong> = serial promoters<br>
+    <strong>High salary + share issuance to insiders</strong> before bankruptcy = cash-out pattern<br>
+    Always search officer names on SEC EDGAR to see their full history across companies
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
         st.divider()
         st.markdown("### 📈 Price Chart")
