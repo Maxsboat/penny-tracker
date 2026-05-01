@@ -91,6 +91,8 @@ if "watchlist" not in st.session_state:
     ]
 if "notes" not in st.session_state:
     st.session_state.notes = {}
+if "manual_flags" not in st.session_state:
+    st.session_state.manual_flags = {}
 
 # ─── EDGAR API Functions ──────────────────────────────────────────────────────
 EDGAR_HEADERS = {"User-Agent": "PennyTracker research@pennytacker.com"}
@@ -535,7 +537,7 @@ with tab2:
                     "Vol Spike":   f"{data['vol_spike']:.1f}x {vol_flag}",
                     "RSI":         rsi if rsi else "—",
                     "Signal":      sig,
-                    "Red Flags":   flag_str,
+                    "Red Flags":   "🚩 MANUALLY FLAGGED" if st.session_state.manual_flags.get(ticker) else flag_str,
                     "Management":  mgmt,
                     "My Notes":    st.session_state.notes.get(ticker, ""),
                     "Research":    f"https://www.otcmarkets.com/stock/{ticker}/company-info",
@@ -545,7 +547,7 @@ with tab2:
                     "Ticker":     ticker,
                     "Price":      "—", "Day %": "—", "Volume": "—",
                     "Vol Spike":  "—", "RSI": "—", "Signal": "⬜ No data",
-                    "Red Flags":  flag_str,
+                    "Red Flags":  "🚩 MANUALLY FLAGGED" if st.session_state.manual_flags.get(ticker) else flag_str,
                     "Management": mgmt,
                     "My Notes":   st.session_state.notes.get(ticker, ""),
                     "Research":   f"https://www.otcmarkets.com/stock/{ticker}/company-info",
@@ -579,16 +581,29 @@ with tab2:
         # Notes editor
         st.divider()
         st.markdown("#### 📝 My Research Notes")
-        st.caption("Add your own observations per ticker — name changes, officer research, why you're watching it. Saved for this session.")
-        note_ticker = st.selectbox("Select ticker to add note", st.session_state.watchlist, key="note_select")
-        note_text = st.text_area(
-            "Note",
-            value=st.session_state.notes.get(note_ticker, ""),
-            placeholder="e.g. 3 name changes, no officers listed on OTC Markets, NY incorporation, classic shell pattern. Watch only.",
-            height=80,
-            key=f"note_input_{note_ticker}"
-        )
-        if st.button("💾 Save Note"):
+        st.caption("Add your own observations and manually flag any ticker your research reveals as suspicious — overrides the automated check.")
+        note_ticker = st.selectbox("Select ticker", st.session_state.watchlist, key="note_select")
+
+        col_note, col_flag = st.columns([3, 1])
+        with col_note:
+            note_text = st.text_area(
+                "Research note",
+                value=st.session_state.notes.get(note_ticker, ""),
+                placeholder="e.g. 3 name changes, no officers on OTC Markets, NY incorporation — classic shell pattern. Watch only.",
+                height=80,
+                key=f"note_input_{note_ticker}"
+            )
+        with col_flag:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            is_flagged = st.session_state.manual_flags.get(note_ticker, False)
+            flag_label = "🚩 Flagged — AVOID" if is_flagged else "✅ Not flagged"
+            flag_color = "#ff5252" if is_flagged else "#00c853"
+            st.markdown(f"<div style='background:#1e2130;border-left:4px solid {flag_color};border-radius:6px;padding:8px 12px;font-weight:700;color:{flag_color}'>{flag_label}</div>", unsafe_allow_html=True)
+            if st.button("🚩 Toggle Flag", use_container_width=True, key="toggle_flag"):
+                st.session_state.manual_flags[note_ticker] = not is_flagged
+                st.rerun()
+
+        if st.button("💾 Save Note", use_container_width=False):
             st.session_state.notes[note_ticker] = note_text
             st.success(f"Note saved for {note_ticker}")
             st.rerun()
