@@ -452,6 +452,21 @@ with tab2:
 
     st.divider()
 
+    # Teaching Mode Toggle
+    teach = st.toggle("🎓 Teaching Mode — explain everything", value=False)
+
+    if teach:
+        st.markdown("""
+<div style='background:#1a1a2e;border-left:4px solid #7c4dff;border-radius:8px;padding:16px;margin-bottom:12px'>
+  <div style='font-weight:700;color:#7c4dff;font-size:1.05em;margin-bottom:8px'>🎓 Welcome to the Stock Market</div>
+  <div style='color:#ccc;font-size:0.875em;line-height:1.9'>
+    <strong>What is a stock?</strong> When you buy a stock, you own a tiny piece of a company. If the company does well, your piece becomes worth more. If it does poorly, it's worth less.<br><br>
+    <strong>What is a penny stock?</strong> A stock that trades for under $5 — usually from small or struggling companies. They're cheap to buy but risky. You can buy 1,000 shares of a $0.003 stock for just $3. That same $3 buys you less than 1 share of Apple.<br><br>
+    <strong>Why are they risky?</strong> Small companies can fail completely. Your investment can go to zero. But if the company recovers or gets bought, it can multiply many times over. High risk, high reward.
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
     if not st.session_state.watchlist:
         st.info("Watchlist is empty. Add tickers above or use the Scanner tab to find candidates.")
     else:
@@ -506,6 +521,39 @@ with tab2:
                 ),
             }
         )
+
+        if teach:
+            st.markdown("""
+<div style='background:#1a1a2e;border-left:4px solid #7c4dff;border-radius:8px;padding:16px;margin-top:12px'>
+  <div style='font-weight:700;color:#7c4dff;margin-bottom:10px'>🎓 What do these columns mean?</div>
+  <div style='color:#ccc;font-size:0.875em;line-height:2.0'>
+    <strong>Price</strong> — What one share costs right now. At $0.003, a dollar buys 333 shares. At $4.35, a dollar buys less than 1 share.<br>
+    <strong>Day %</strong> — How much the price changed today. +50% means it went up a lot. -50% means it lost half its value in one day. Penny stocks move fast.<br>
+    <strong>Volume</strong> — How many shares were traded today. Low volume means few people are interested. High volume means something is happening.<br>
+    <strong>Vol Spike 🔥</strong> — When today's trading is 2x or more than normal. The fire emoji means unusual activity — someone big may be buying or selling.<br>
+    <strong>RSI</strong> — A number from 0-100. Under 35 means the stock may be oversold (could bounce back). Over 65 means it may be overbought (could drop). Around 50 is neutral.<br>
+    <strong>Signal</strong> — A simple buy/hold indicator based on recent price trends. Not a guarantee — just a starting point for discussion.<br>
+    <strong>Red Flags ⚠️</strong> — Things that look suspicious. No 10-K means the company isn't filing required reports. That's like a student not turning in homework — something is wrong.<br>
+    <strong>Management 🚨</strong> — Are the company's leaders publicly identified? Hiding names is a serious warning sign. Honest companies disclose who runs them.<br>
+    <strong>🔍 Research</strong> — Click this to read everything about the company on OTC Markets. Always research before buying anything.
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+            st.markdown("""
+<div style='background:#1a2a1a;border-left:4px solid #00c853;border-radius:8px;padding:16px;margin-top:12px'>
+  <div style='font-weight:700;color:#00c853;margin-bottom:8px'>🎓 The $500 Learning Portfolio</div>
+  <div style='color:#ccc;font-size:0.875em;line-height:1.9'>
+    <strong>Rule 1 — Never invest more than you can afford to lose completely.</strong> With penny stocks, assume the worst.<br>
+    <strong>Rule 2 — Read before you buy.</strong> Click 🔍 Research on every stock. Read what the company actually does.<br>
+    <strong>Rule 3 — Red flags mean walk away.</strong> Hidden management and no filings = skip it, no matter how cheap.<br>
+    <strong>Rule 4 — Spread your risk.</strong> Don't put $500 in one stock. Try $100 in 5 different ones.<br>
+    <strong>Rule 5 — Watch and wait.</strong> Check the app daily. Watch how news, volume, and price connect.<br>
+    <strong>Rule 6 — Write down why you bought it.</strong> Then when it goes up or down, you can learn from your own reasoning.<br><br>
+    The goal isn't to get rich. The goal is to understand how markets work — and that lesson is worth far more than $500.
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
         st.divider()
         st.markdown("""
