@@ -420,16 +420,28 @@ with tab2:
                     "Vol Spike":   f"{data['vol_spike']:.1f}x {vol_flag}",
                     "RSI":         rsi if rsi else "—",
                     "Signal":      sig,
+                    "Research":    f"https://www.otcmarkets.com/stock/{ticker}/company-info",
                 })
             else:
                 rows.append({
                     "Ticker": ticker,
                     "Price":  "—", "Day %": "—", "Volume": "—",
                     "Vol Spike": "—", "RSI": "—", "Signal": "⬜ No data",
+                    "Research": f"https://www.otcmarkets.com/stock/{ticker}/company-info",
                 })
 
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Research": st.column_config.LinkColumn(
+                    "OTC Profile",
+                    display_text="🔍 Research",
+                )
+            }
+        )
 
         st.divider()
         st.markdown("### 📈 Price Chart")
