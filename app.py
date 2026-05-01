@@ -489,6 +489,12 @@ with tab1:
                         ticker_display = f"<span style='background:#2a2a00;color:#ffd600;padding:2px 8px;border-radius:4px;font-weight:700'>{possible_ticker}</span>"
                         price_display  = "<span style='color:#888;margin-left:8px'>No price data — may be delisted</span>"
 
+                tags = classify_filing(scan_type.lower())
+                tag_html = ""
+                for tag in tags:
+                    css = {"BANKRUPTCY": "tag-bk", "LITIGATION": "tag-lit", "SETTLEMENT": "tag-settle"}.get(tag, "tag-volume")
+                    tag_html += f"<span class='tag {css}'>{tag}</span>"
+
                 st.markdown(f"""
 <div class='scanner-card'>
   <div style='display:flex;justify-content:space-between;align-items:flex-start'>
