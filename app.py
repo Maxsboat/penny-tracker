@@ -193,12 +193,14 @@ def get_management_names(ticker):
         return "🚨 No proxy or 10-K — management HIDDEN"
     except Exception:
         return "⬜ Could not verify"
+
+@st.cache_data(ttl=3600)
+def get_recent_filings(ticker, form_types=None):
     if form_types is None:
-        form_types = ["8-K", "10-K", "SC 13G"]
+        form_types = ["8-K", "10-K"]
     try:
-        url = f"https://efts.sec.gov/LATEST/search-index?q=%22{ticker}%22&forms={','.join(form_types)}&dateRange=custom&startdt=2023-01-01"
         r = requests.get(
-            f"https://efts.sec.gov/LATEST/search-index?q=%22{ticker}%22&forms=8-K,10-K&dateRange=custom&startdt=2023-01-01",
+            f"https://efts.sec.gov/LATEST/search-index?q=%22{ticker}%22&forms={','.join(form_types)}&dateRange=custom&startdt=2023-01-01",
             headers=EDGAR_HEADERS, timeout=10
         )
         data = r.json()
@@ -206,13 +208,17 @@ def get_management_names(ticker):
         filings = []
         for hit in hits[:15]:
             src = hit.get("_source", {})
+            if not src.get("entity_name"):
+                names = src.get("display_names", [])
+                if names:
+                    src["entity_name"] = names[0].get("name", ticker) if isinstance(names[0], dict) else names[0]
             filings.append({
                 "ticker":    ticker,
                 "form":      src.get("form_type", ""),
                 "date":      src.get("file_date", ""),
                 "company":   src.get("entity_name", ticker),
                 "title":     src.get("display_names", [""])[0] if src.get("display_names") else "",
-                "url":       f"https://www.sec.gov/Archives/edgar/data/{src.get('entity_id','')}/{src.get('file_num','').replace('-','')}/",
+                "url":       f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={ticker}&type={src.get('form_type','8-K')}&dateb=&owner=include&count=10",
                 "accession": src.get("file_num", ""),
             })
         return filings
