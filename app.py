@@ -89,6 +89,10 @@ if "watchlist" not in st.session_state:
     st.session_state.watchlist = [
         "CENN", "SNDL", "NAKD", "MULN", "BBIG"
     ]
+if "notes" not in st.session_state:
+    st.session_state.notes = {}
+if "manual_flags" not in st.session_state:
+    st.session_state.manual_flags = {}
 
 # ─── EDGAR API Functions ──────────────────────────────────────────────────────
 EDGAR_HEADERS = {"User-Agent": "PennyTracker research@pennytacker.com"}
