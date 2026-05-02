@@ -353,7 +353,10 @@ with tab1:
             hits = search_edgar_full(query, form_type=scan_form, start_date=scan_start)
 
         if hits:
-            st.success("Found " + str(len(hits)) + " filings matching '" + scan_type + "'")
+            # Filter by date — EDGAR sorts by relevance not date
+            hits = [h for h in hits if h.get("_source", {}).get("file_date", "") >= scan_start]
+            if hits:
+                st.success("Found " + str(len(hits)) + " filings since " + scan_start + " matching '" + scan_type + "'")
             for hit in hits:
                 src     = hit.get("_source", {})
                 company = src.get("entity_name", "Unknown")
@@ -413,6 +416,8 @@ with tab1:
                 html += "<a href='" + cik_url + "' target='_blank' style='color:#4a9eff;text-decoration:none'>EDGAR Filings</a>"
                 html += "</div></div>"
                 st.markdown(html, unsafe_allow_html=True)
+            else:
+                st.info("No filings found since " + scan_start + ". Try an earlier date range.")
         else:
             st.info("No results found. Try broadening the date range or changing the scan type.")
 
