@@ -160,6 +160,73 @@ def search_edgar_by_keyword(keyword, form_type="8-K", start_date="2024-01-01"):
         return []
 
 @st.cache_data(ttl=3600)
+def get_ticker_from_cik(cik):
+    try:
+        r = requests.get("https://www.sec.gov/files/company_tickers.json", headers=EDGAR_HEADERS, timeout=10)
+        data = r.json()
+        cik_int = int(cik)
+        for val in data.values():
+            if val.get("cik_str") == cik_int:
+                return val.get("ticker", ""), val.get("title", "")
+        return "", ""
+    except Exception:
+        return "", ""
+
+@st.cache_data(ttl=3600)
+def get_red_flags(ticker):
+    flags = []
+    try:
+        r = requests.get(
+            "https://www.sec.gov/cgi-bin/browse-edgar?company=&CIK=" + ticker +
+            "&type=10-K&dateb=&owner=include&count=5&search_text=&action=getcompany&output=atom",
+            headers=EDGAR_HEADERS, timeout=10)
+        if "No matching" in r.text or r.text.count("<entry>") == 0:
+            flags.append("No 10-K filed")
+        r3 = requests.get(
+            "https://www.sec.gov/cgi-bin/browse-edgar?company=&CIK=" + ticker +
+            "&type=8-K&dateb=&owner=include&count=10&search_text=&action=getcompany&output=atom",
+            headers=EDGAR_HEADERS, timeout=10)
+        if "chapter 11" in r3.text.lower() or "bankruptcy" in r3.text.lower():
+            flags.append("Bankruptcy in filings")
+    except Exception:
+        pass
+    try:
+        r5 = requests.get("https://www.otcmarkets.com/filing/json/issuer/" + ticker + "/profile",
+                          headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        if r5.status_code == 200:
+            profile = r5.json()
+            former = profile.get("formerNames", [])
+            if len(former) >= 2:
+                flags.append(str(len(former)) + " prior name changes")
+            state = profile.get("stateOfIncorporation", "")
+            if state in ["NV", "WY"]:
+                flags.append("Incorporated in " + state)
+            if str(profile.get("sicCode", "")) == "3944":
+                flags.append("SIC 3944 mismatch")
+    except Exception:
+        pass
+    return flags
+
+@st.cache_data(ttl=3600)
+def get_management_names(ticker):
+    try:
+        r = requests.get(
+            "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + ticker +
+            "&type=DEF+14A&dateb=&owner=include&count=5&output=atom",
+            headers=EDGAR_HEADERS, timeout=10)
+        if r.text.count("<entry>") > 0:
+            return "Proxy filed - officers disclosed"
+        r2 = requests.get(
+            "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + ticker +
+            "&type=10-K&dateb=&owner=include&count=3&output=atom",
+            headers=EDGAR_HEADERS, timeout=10)
+        if r2.text.count("<entry>") > 0:
+            return "10-K filed - check Item 10 for officers"
+        return "No proxy or 10-K - management HIDDEN"
+    except Exception:
+        return "Could not verify"
+
+@st.cache_data(ttl=3600)
 def search_edgar_full(query, form_type="8-K", start_date="2024-01-01"):
     """Use EDGAR full-text search"""
     try:
