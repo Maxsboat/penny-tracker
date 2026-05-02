@@ -347,38 +347,72 @@ with tab1:
         "Reorganization plan filed":        "plan of reorganization",
     }
 
-    if st.button("🔍 Run Scan", type="primary", use_container_width=True):
+    if st.button("Run Scan", type="primary", use_container_width=True):
         query = SCAN_QUERIES[scan_type]
-        with st.spinner(f"Scanning EDGAR for '{query}'..."):
+        with st.spinner("Scanning EDGAR for '" + query + "'..."):
             hits = search_edgar_full(query, form_type=scan_form, start_date=scan_start)
 
         if hits:
-            st.success(f"Found {len(hits)} filings matching '{scan_type}'")
+            st.success("Found " + str(len(hits)) + " filings matching '" + scan_type + "'")
             for hit in hits:
-                src = hit.get("_source", {})
+                src     = hit.get("_source", {})
                 company = src.get("entity_name", "Unknown")
                 date    = src.get("file_date", "")
                 form    = src.get("form_type", scan_form)
                 period  = src.get("period_of_report", "")
+                cik     = str(src.get("entity_id", ""))
+
+                # Ticker + price lookup
+                m = re.search(r'\(([A-Z]{1,5})\)', company)
+                possible_ticker = m.group(1) if m else ""
+                if not possible_ticker and cik:
+                    possible_ticker, _ = get_ticker_from_cik(cik)
+
+                ticker_html = ""
+                price_html  = ""
+                if possible_ticker:
+                    pdata = get_stock_data(possible_ticker)
+                    if pdata:
+                        color = "#00c853" if pdata["change"] >= 0 else "#ff5252"
+                        arrow = "+" if pdata["change"] >= 0 else ""
+                        ticker_html = "<span style='background:#2a2a00;color:#ffd600;padding:2px 8px;border-radius:4px;font-weight:700;margin-right:8px'>" + possible_ticker + "</span>"
+                        price_html  = "<span style='color:" + color + ";font-weight:700'>$" + str(pdata["price"]) + " (" + arrow + str(pdata["change"]) + "%)</span>"
+                    else:
+                        ticker_html = "<span style='background:#2a2a00;color:#ffd600;padding:2px 8px;border-radius:4px;font-weight:700;margin-right:8px'>" + possible_ticker + "</span>"
+                        price_html  = "<span style='color:#888'>No price data - delisted or OTC only</span>"
 
                 tags = classify_filing(scan_type.lower())
-                tag_html = ""
+                tag_str = ""
                 for tag in tags:
-                    css = {"BANKRUPTCY": "tag-bk", "LITIGATION": "tag-lit", "SETTLEMENT": "tag-settle"}.get(tag, "tag-volume")
-                    tag_html += f"<span class='tag {css}'>{tag}</span>"
+                    color_map = {"BANKRUPTCY": "#ff9800", "LITIGATION": "#ff5252", "SETTLEMENT": "#00c853"}
+                    tc = color_map.get(tag, "#4a9eff")
+                    tag_str += "<span style='color:" + tc + ";font-weight:700;margin-left:8px'>" + tag + "</span>"
 
-                st.markdown(f"""
-<div class='scanner-card'>
-  <div style='display:flex;justify-content:space-between;align-items:flex-start'>
-    <div>
-      <span style='font-size:1.1em;font-weight:700;color:#fff'>{company}</span>
-      <span style='color:#888;font-size:0.8em;margin-left:10px'>{form} · {date}</span>
-    </div>
-    <div>{tag_html}</div>
-  </div>
-  <div style='font-size:0.82em;color:#aaa;margin-top:4px'>Period: {period}</div>
-</div>
-""", unsafe_allow_html=True)
+                # Build URLs
+                company_clean = re.sub(r'\s*\(CIK\s*\d+\)', '', company).strip()
+                cik_url   = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + cik + "&type=8-K&dateb=&owner=include&count=10"
+                otc_word  = company_clean.split()[0] if company_clean else ""
+                otc_url   = "https://www.otcmarkets.com/search#/" + otc_word
+
+                html  = "<div class='scanner-card'>"
+                html += "<div style='display:flex;justify-content:space-between;align-items:flex-start'>"
+                html += "<div>"
+                html += "<span style='font-size:1.1em;font-weight:700;color:#fff'>" + company_clean + "</span>"
+                if cik:
+                    html += " <a href='" + cik_url + "' target='_blank' style='color:#555;font-size:0.75em'>CIK " + cik + " (EDGAR)</a>"
+                html += "<span style='color:#888;font-size:0.8em;margin-left:10px'>" + form + " | " + date + "</span>"
+                html += "</div>"
+                html += "<div>" + tag_str + "</div>"
+                html += "</div>"
+                if ticker_html:
+                    html += "<div style='margin-top:6px'>" + ticker_html + price_html + "</div>"
+                html += "<div style='font-size:0.82em;color:#aaa;margin-top:4px'>Period: " + period + "</div>"
+                html += "<div style='font-size:0.82em;margin-top:6px'>"
+                html += "<a href='" + otc_url + "' target='_blank' style='color:#ffd600;text-decoration:none'>Search OTC Markets</a>"
+                html += " &nbsp;&nbsp; "
+                html += "<a href='" + cik_url + "' target='_blank' style='color:#4a9eff;text-decoration:none'>EDGAR Filings</a>"
+                html += "</div></div>"
+                st.markdown(html, unsafe_allow_html=True)
         else:
             st.info("No results found. Try broadening the date range or changing the scan type.")
 
