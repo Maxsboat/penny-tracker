@@ -391,16 +391,22 @@ with tab1:
                     tc = color_map.get(tag, "#4a9eff")
                     tag_str += "<span style='color:" + tc + ";font-weight:700;margin-left:8px'>" + tag + "</span>"
 
-                # Build URLs
+                # Build URLs — use ticker for OTC if available, else company name
                 company_clean = re.sub(r'\s*\(CIK\s*\d+\)', '', company).strip()
-                cik_url   = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + cik + "&type=8-K&dateb=&owner=include&count=10"
-                otc_word  = company_clean.split()[0] if company_clean else ""
-                otc_url   = "https://www.otcmarkets.com/search#/" + otc_word
+                # Remove ticker from company name display if it's already shown separately
+                company_display = re.sub(r'\s*\([A-Z]{1,5}\)\s*$', '', company_clean).strip()
+                cik_url = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + cik + "&type=8-K&dateb=&owner=include&count=10"
+                # Use ticker for OTC Markets if found, otherwise search by first word of company
+                if possible_ticker:
+                    otc_url = "https://www.otcmarkets.com/stock/" + possible_ticker + "/overview"
+                else:
+                    otc_word = requests.utils.quote(company_display.split()[0]) if company_display else ""
+                    otc_url  = "https://www.otcmarkets.com/research/stock-screener?market=Pink,Expert,Venture&search=" + otc_word
 
                 html  = "<div class='scanner-card'>"
                 html += "<div style='display:flex;justify-content:space-between;align-items:flex-start'>"
                 html += "<div>"
-                html += "<span style='font-size:1.1em;font-weight:700;color:#fff'>" + company_clean + "</span>"
+                html += "<span style='font-size:1.1em;font-weight:700;color:#fff'>" + company_display + "</span>"
                 if cik:
                     html += " <a href='" + cik_url + "' target='_blank' style='color:#555;font-size:0.75em'>CIK " + cik + " (EDGAR)</a>"
                 html += "<span style='color:#888;font-size:0.8em;margin-left:10px'>" + form + " | " + date + "</span>"
@@ -452,6 +458,10 @@ with tab2:
                 st.session_state.watchlist.remove(to_remove)
                 st.rerun()
 
+    price_filter = st.toggle("Show only stocks under $5", value=True)
+    if price_filter:
+        st.caption("Hiding tickers over $5. Toggle off to see all.")
+
     st.divider()
 
     if not st.session_state.watchlist:
@@ -459,28 +469,74 @@ with tab2:
     else:
         rows = []
         for ticker in st.session_state.watchlist:
-            data = get_stock_data(ticker)
+            data  = get_stock_data(ticker)
+            flags = get_red_flags(ticker)
+            mgmt  = get_management_names(ticker)
+            is_flagged = st.session_state.manual_flags.get(ticker, False)
+            flag_str = "MANUALLY FLAGGED" if is_flagged else (", ".join(flags) if flags else "None detected")
+
             if data:
+                if price_filter and data["price"] > 5.0:
+                    continue
                 sig, rsi = get_signal(data["hist"])
-                vol_flag = "🔥" if data["vol_spike"] >= 2.0 else ""
+                vol_flag = "SPIKE" if data["vol_spike"] >= 2.0 else ""
                 rows.append({
-                    "Ticker":      ticker,
-                    "Price":       f"${data['price']:.4f}",
-                    "Day %":       f"{data['change']:+.2f}%",
-                    "Volume":      f"{data['volume']:,}",
-                    "Vol Spike":   f"{data['vol_spike']:.1f}x {vol_flag}",
-                    "RSI":         rsi if rsi else "—",
-                    "Signal":      sig,
+                    "Ticker":     ticker,
+                    "Price":      "$" + str(round(data["price"], 4)),
+                    "Day %":      str(data["change"]) + "%",
+                    "Volume":     str(data["volume"]),
+                    "Vol Spike":  str(data["vol_spike"]) + "x " + vol_flag,
+                    "RSI":        rsi if rsi else "--",
+                    "Signal":     sig,
+                    "Red Flags":  flag_str,
+                    "Management": mgmt,
+                    "My Notes":   st.session_state.notes.get(ticker, ""),
+                    "Research":   "https://www.otcmarkets.com/stock/" + ticker + "/company-info",
                 })
             else:
                 rows.append({
-                    "Ticker": ticker,
-                    "Price":  "—", "Day %": "—", "Volume": "—",
-                    "Vol Spike": "—", "RSI": "—", "Signal": "⬜ No data",
+                    "Ticker": ticker, "Price": "--", "Day %": "--", "Volume": "--",
+                    "Vol Spike": "--", "RSI": "--", "Signal": "No data",
+                    "Red Flags": flag_str, "Management": mgmt,
+                    "My Notes": st.session_state.notes.get(ticker, ""),
+                    "Research": "https://www.otcmarkets.com/stock/" + ticker + "/company-info",
                 })
 
-        df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
+                column_config={
+                    "Research": st.column_config.LinkColumn("OTC Profile", display_text="Research"),
+                    "Red Flags": st.column_config.TextColumn("Red Flags", width="medium"),
+                    "Management": st.column_config.TextColumn("Management", width="large"),
+                    "My Notes": st.column_config.TextColumn("My Notes", width="large"),
+                })
+
+        # Quick flag buttons
+        st.divider()
+        st.markdown("**Quick Flag -- click to toggle red flag:**")
+        if st.session_state.watchlist:
+            flag_cols = st.columns(len(st.session_state.watchlist))
+            for col, ticker in zip(flag_cols, st.session_state.watchlist):
+                with col:
+                    is_flagged = st.session_state.manual_flags.get(ticker, False)
+                    btn_label = "FLAG: " + ticker if is_flagged else "OK: " + ticker
+                    btn_type  = "primary" if is_flagged else "secondary"
+                    if st.button(btn_label, key="qflag_" + ticker, use_container_width=True, type=btn_type):
+                        st.session_state.manual_flags[ticker] = not is_flagged
+                        st.rerun()
+
+        # Notes editor
+        st.divider()
+        st.markdown("#### My Research Notes")
+        note_ticker = st.selectbox("Select ticker", st.session_state.watchlist, key="note_select")
+        note_text = st.text_area("Research note",
+            value=st.session_state.notes.get(note_ticker, ""),
+            placeholder="e.g. 3 name changes, no officers on OTC Markets -- classic shell pattern.",
+            height=80, key="note_input_" + note_ticker)
+        if st.button("Save Note"):
+            st.session_state.notes[note_ticker] = note_text
+            st.success("Note saved for " + note_ticker)
+            st.rerun()
 
         st.divider()
         st.markdown("### 📈 Price Chart")
