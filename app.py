@@ -533,6 +533,26 @@ with tab2:
     if price_filter:
         st.caption("Hiding tickers over $5. Toggle off to see all.")
 
+    # Teaching Mode
+    st.markdown("""<div style='background:#1a1a2e;border:1px solid #7c4dff;border-radius:8px;padding:10px 16px;margin:12px 0'>
+  <strong style='color:#7c4dff'>Teaching Mode</strong> -- toggle on to explain every column in plain English.
+  Great for learning with kids or friends new to investing.
+</div>""", unsafe_allow_html=True)
+    teach = st.toggle("Teaching Mode -- explain everything", value=False)
+
+    if teach:
+        st.markdown("""<div style='background:#1a1a2e;border-left:4px solid #7c4dff;border-radius:8px;padding:16px;margin-bottom:12px'>
+  <div style='font-weight:700;color:#7c4dff;font-size:1.05em;margin-bottom:8px'>Welcome to the Stock Market</div>
+  <div style='color:#ccc;font-size:0.875em;line-height:1.9'>
+    <strong>What is a stock?</strong> When you buy a stock, you own a tiny piece of a company.
+    If the company does well, your piece becomes worth more. If it does poorly, it is worth less.<br><br>
+    <strong>What is a penny stock?</strong> A stock that trades for under $5, usually from small or
+    struggling companies. You can buy 1,000 shares of a $0.003 stock for just $3.<br><br>
+    <strong>Why are they risky?</strong> Small companies can fail completely. Your investment can go
+    to zero. But if the company recovers, it can multiply many times over. High risk, high reward.
+  </div>
+</div>""", unsafe_allow_html=True)
+
     st.divider()
 
     if not st.session_state.watchlist:
@@ -581,6 +601,39 @@ with tab2:
                     "Management": st.column_config.TextColumn("Management", width="large"),
                     "My Notes": st.column_config.TextColumn("My Notes", width="large"),
                 })
+
+        if teach and rows:
+            st.markdown("""<div style='background:#1e2130;border-radius:8px;padding:16px;margin-top:12px'>
+  <div style='font-weight:700;color:#7c4dff;margin-bottom:10px'>What do these columns mean?</div>
+  <div style='color:#ccc;font-size:0.875em;line-height:2.0'>
+    <strong>Price</strong> -- What one share costs right now. At $0.003, a dollar buys 333 shares.<br>
+    <strong>Day %</strong> -- How much the price changed today. Penny stocks can move 50% in one day.<br>
+    <strong>Volume</strong> -- How many shares were traded today. Low volume = little interest.<br>
+    <strong>Vol Spike</strong> -- SPIKE means today is 2x or more than normal. Someone big may be moving.<br>
+    <strong>RSI</strong> -- 0-100 scale. Under 35 = Oversold (see below). Over 65 = Overbought.<br>
+    <strong>Signal: Oversold -- watch entry</strong> -- RSI under 35 means the stock has been sold heavily
+    and may be due for a bounce back up. This does NOT mean buy -- it means WATCH. Read the company
+    first. If the business is real and the sell-off was panic, this can be a good entry point.<br>
+    <strong>Signal: Momentum up/down</strong> -- Based on 5-day vs 20-day moving average. Up means
+    recent price trend is rising. Down means it is falling.<br>
+    <strong>Red Flags</strong> -- Automatic checks: no 10-K filed, hidden management, name changes.<br>
+    <strong>Management</strong> -- Are company leaders publicly identified? Hidden names = danger.<br>
+    <strong>Research</strong> -- Click to read the full company profile on OTC Markets. Always do this.
+  </div>
+</div>""", unsafe_allow_html=True)
+
+            st.markdown("""<div style='background:#1a2a1a;border-left:4px solid #00c853;border-radius:8px;padding:16px;margin-top:12px'>
+  <div style='font-weight:700;color:#00c853;margin-bottom:8px'>The $500 Learning Portfolio</div>
+  <div style='color:#ccc;font-size:0.875em;line-height:1.9'>
+    <strong>Rule 1 -- Never invest more than you can afford to lose completely.</strong><br>
+    <strong>Rule 2 -- Read before you buy.</strong> Click Research on every stock first.<br>
+    <strong>Rule 3 -- Red flags mean walk away.</strong> Hidden management = skip it.<br>
+    <strong>Rule 4 -- Spread your risk.</strong> Try $100 in 5 different stocks, not $500 in one.<br>
+    <strong>Rule 5 -- Watch and wait.</strong> Check the app daily. Oversold + good company = patience.<br>
+    <strong>Rule 6 -- Write down why you bought it.</strong> Learn from your own reasoning.<br><br>
+    The goal is not to get rich. The goal is to understand how markets work.
+  </div>
+</div>""", unsafe_allow_html=True)
 
         # Quick flag buttons
         st.divider()
