@@ -163,12 +163,26 @@ def search_edgar_by_keyword(keyword, form_type="8-K", start_date="2024-01-01"):
 def search_edgar_full(query, form_type="8-K", start_date="2024-01-01"):
     """Use EDGAR full-text search"""
     try:
-        r = requests.get(
-            f"https://efts.sec.gov/LATEST/search-index?q=%22{requests.utils.quote(query)}%22&forms={form_type}&dateRange=custom&startdt={start_date}&hits.hits._source=file_date,entity_name,form_type,period_of_report,file_num",
-            headers=EDGAR_HEADERS, timeout=15
-        )
+        encoded = requests.utils.quote(query)
+        url = ("https://efts.sec.gov/LATEST/search-index?q=%22" + encoded +
+               "%22&forms=" + form_type + "&dateRange=custom&startdt=" + start_date)
+        r = requests.get(url, headers=EDGAR_HEADERS, timeout=15)
         data = r.json()
-        return data.get("hits", {}).get("hits", [])
+        hits = data.get("hits", {}).get("hits", [])
+        for hit in hits:
+            src = hit.get("_source", {})
+            # Try every possible field for the company name
+            name = (src.get("entity_name") or src.get("company_name") or "")
+            if not name:
+                display = src.get("display_names", [])
+                if display:
+                    first = display[0]
+                    name = (first.get("name") or first.get("entity_name") or str(first)) if isinstance(first, dict) else str(first)
+            src["entity_name"] = name if name else "Unknown"
+            if not src.get("file_date"):
+                src["file_date"] = src.get("period_of_report", "")
+            hit["_source"] = src
+        return hits
     except Exception:
         return []
 
@@ -309,9 +323,20 @@ with tab1:
             "Reorganization plan filed",
         ])
     with col2:
-        scan_form = st.selectbox("Filing type", ["8-K", "10-K", "10-Q"])
+        scan_form_label = st.selectbox("Filing type", [
+            "8-K -- Material events (bankruptcy, settlement, CEO change)",
+            "10-K -- Annual report (business description, management bios)",
+            "10-Q -- Quarterly report (cash burn, financial trend)",
+        ])
+        scan_form = scan_form_label.split(" ")[0]
     with col3:
-        scan_start = st.selectbox("Since", ["2025-01-01", "2024-06-01", "2024-01-01", "2023-01-01"])
+        yr = datetime.now().year
+        scan_start = st.selectbox("Since", [
+            str(yr) + "-01-01",
+            str(yr-1) + "-06-01",
+            str(yr-1) + "-01-01",
+            str(yr-2) + "-01-01",
+        ])
 
     SCAN_QUERIES = {
         "Bankruptcy filings (Chapter 11)":  "chapter 11 bankruptcy",
@@ -557,7 +582,11 @@ with tab4:
             "All litigation events",
         ])
     with lit_col2:
-        lit_start = st.selectbox("Since", ["2025-01-01", "2024-06-01", "2024-01-01"], key="lit_start")
+        lit_start = st.selectbox("Since", [
+            str(datetime.now().year) + "-01-01",
+            str(datetime.now().year-1) + "-06-01",
+            str(datetime.now().year-1) + "-01-01",
+        ], key="lit_start")
 
     LIT_QUERIES = {
         "Patent infringement — plaintiff win":        "patent infringement judgment plaintiff",
